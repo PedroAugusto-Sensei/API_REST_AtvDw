@@ -1,7 +1,17 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 #root {
   text-align: center;
-  justify-content: center;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 body {
@@ -14,40 +24,202 @@ body {
 }
 
 main {
-  padding: 20px;
+  padding: 40px 20px;
   width: 100%;
-  place-content: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+  text-align: center;
+}
+
+main img {
+  max-width: 300px;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.2));
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
 }
 
 .Header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 20px 0;
+  width: 100%;
+}
+
+.navegador {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  padding: 20px;
-  color: rgb(0, 0, 0);
+  margin: 0;
 }
 
 .navegador ul {
   display: flex;
-  gap: 20px;
+  gap: 40px;
+  list-style-type: none;
+  padding: 0;
+}
+
+.navegador a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 18px;
+  padding: 10px 20px;
+  border-radius: 25px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.navegador a::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: #667eea;
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+}
+
+.navegador a:hover {
+  background: rgba(102, 126, 234, 0.1);
+  transform: translateY(-2px);
+}
+
+.navegador a:hover::after {
+  width: 80%;
 }
 
 h1 {
-  color: rgb(0, 0, 0);
+  color: #ffffff;
+  font-size: 3rem;
+  font-weight: 700;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+  margin-bottom: 10px;
+}
+
+h2 {
+  color: #ffffff;
+  font-size: 2rem;
+  margin-bottom: 2vh;
+  margin-top: 6vh;
 }
 
 h3 {
-  color: rgb(0, 0, 0);
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: 400;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 p {
-  color: rgb(0, 0, 0);
+  color: #333;
+}
+
+/* Estilos do formulário de login */
+.form-container {
+  background: white;
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 400px;
+  width: 90%;
+  margin: 0 auto;
+}
+
+.form-container > div {
+  margin-bottom: 25px;
+  text-align: left;
+}
+
+.form-container label {
+  display: block;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.form-container input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.form-container input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-container button {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+}
+
+.form-container button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+.form-container button:active {
+  transform: translateY(0);
 }
 
 footer {
-  bottom: 0;
-  margin-top: auto;
-  padding: 10px;
-  background-color: #f1f1f1;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 20px;
   color: #333;
+  box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  margin-top: auto;
+  text-align: center;
+}
+
+footer p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2rem;
+  }
+  
+  h3 {
+    font-size: 1.2rem;
+  }
+  
+  .navegador ul {
+    gap: 20px;
+  }
+  
+  .navegador a {
+    font-size: 16px;
+    padding: 8px 15px;
+  }
 }
