@@ -3,21 +3,9 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import HomePage from './pages/home';
 import LoginPage from './pages/login';
 import CadastroPage from './pages/register';
+import BoardPage from './pages/board';
 
 function App() {
-  // Exemplo para o futuro
-  // function PrivateRoute({ children }) {
-  //   const isAuthenticated = localStorage.getItem('token'); // ou Context
-  //   return isAuthenticated ? children : <Navigate to="/login" />;
-  // }
-
-  // // Uso:
-  // <Route path='/home' element={
-  //   <PrivateRoute>
-  //     <HomePage />
-  //   </PrivateRoute>
-  // } />
-
   return (
     <BrowserRouter>
       <header className='Header'>
@@ -48,6 +36,7 @@ function App() {
           </main>
         } />
         <Route path='/home' element={<HomePage />} />
+        <Route path='/board/:id' element={<BoardPage />} />
         <Route path='/login' element={<LoginPage />} />
         <Route path='/cadastro' element={<CadastroPage />} />
       </Routes>
