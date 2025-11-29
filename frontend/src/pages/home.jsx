@@ -1,25 +1,45 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "./home.css";
+import api from "../services/api";
 
 function HomePage() {
     const [boards, setBoards] = useState([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newBoardName, setNewBoardName] = useState("");
-    const [userName, setUserName] = useState("Usuário"); // Isso virá da autenticação
+    const [userName, setUserName] = useState("Usuário");
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
-    // Simulação de dados - substituir por chamada real à API
     useEffect(() => {
-        // Aqui você faria: const response = await axios.get("http://localhost:3000/api/boards")
-        // Por enquanto, dados de exemplo:
-        const mockBoards = [
-            { id: 1, name: "Meu Projeto", creator_id: 1 },
-            { id: 2, name: "Tarefas Pessoais", creator_id: 1 },
-            { id: 3, name: "Estudos", creator_id: 1 }
-        ];
-        setBoards(mockBoards);
+        loadUserData();
+        loadBoards();
     }, []);
 
-    const handleCreateBoard = (e) => {
+    const loadUserData = async () => {
+        try {
+            const response = await api.get('/auth/me');
+            setUserName(response.data.username);
+        } catch (error) {
+            console.error('Erro ao buscar dados do usuário:', error);
+            // Se não estiver autenticado, redireciona para login
+            navigate('/login');
+        }
+    };
+
+    const loadBoards = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/boards');
+            setBoards(response.data);
+        } catch (error) {
+            console.error('Erro ao buscar boards:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCreateBoard = async (e) => {
         e.preventDefault();
         
         if (!newBoardName.trim()) {
@@ -27,32 +47,76 @@ function HomePage() {
             return;
         }
 
-        // Aqui você faria a chamada à API para criar o quadro
-        // const response = await axios.post("http://localhost:3000/api/boards", { name: newBoardName })
-        
-        const newBoard = {
-            id: boards.length + 1,
-            name: newBoardName,
-            creator_id: 1
-        };
+        try {
+            const response = await api.post('/boards', {
+                name: newBoardName
+            });
 
-        setBoards([...boards, newBoard]);
-        setNewBoardName("");
-        setShowCreateModal(false);
-    };
-
-    const handleDeleteBoard = (boardId) => {
-        if (window.confirm("Tem certeza que deseja excluir este quadro?")) {
-            // Aqui você faria: await axios.delete(`http://localhost:3000/api/boards/${boardId}`)
-            setBoards(boards.filter(board => board.id !== boardId));
+            // Adiciona o novo board à lista
+            setBoards([...boards, response.data.board]);
+            setNewBoardName("");
+            setShowCreateModal(false);
+            
+            alert("Quadro criado com sucesso!");
+        } catch (error) {
+            console.error('Erro ao criar board:', error);
+            alert(error.response?.data?.message || "Erro ao criar quadro.");
         }
     };
+
+    const handleDeleteBoard = async (boardId) => {
+        if (window.confirm("Tem certeza que deseja excluir este quadro?")) {
+            try {
+                await api.delete(`/boards/${boardId}`);
+                setBoards(boards.filter(board => board.id !== boardId));
+                alert("Quadro deletado com sucesso!");
+            } catch (error) {
+                console.error('Erro ao deletar board:', error);
+                alert(error.response?.data?.message || "Erro ao deletar quadro.");
+            }
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await api.post('/auth/logout');
+            navigate('/login');
+        } catch (error) {
+            console.error('Erro ao fazer logout:', error);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="home-container">
+                <div className="home-header">
+                    <h1>Carregando...</h1>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="home-container">
             <div className="home-header">
-                <h1>Meus Quadros</h1>
-                <p className="welcome-text">Olá, {userName}! 👋</p>
+                <div>
+                    <h1>Meus Quadros</h1>
+                    <p className="welcome-text">Olá, {userName}! 👋</p>
+                </div>
+                <button 
+                    onClick={handleLogout}
+                    style={{
+                        padding: '10px 20px',
+                        background: '#ff4757',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '600'
+                    }}
+                >
+                    Sair
+                </button>
             </div>
 
             <div className="boards-grid">
@@ -63,7 +127,7 @@ function HomePage() {
                             <div className="board-actions">
                                 <button 
                                     className="btn-open"
-                                    onClick={() => window.location.href = `/board/${board.id}`}
+                                    onClick={() => navigate(`/board/${board.id}`)}
                                 >
                                     Abrir
                                 </button>
