@@ -2,18 +2,8 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../utils/db');
 const { body, validationResult } = require('express-validator');
-
-// ----------------------------------------------------------------------
-// ROTA DE REGISTRO (POST /register)
-// ----------------------------------------------------------------------
-/**
- * @swagger
- * tags:
- *  - name: Autenticação
- *    description: Rotas de registro, login e logout
- */
+const { getUserByEmail, createUser } = require('../data/mock-data');
 
 // ----------------------------------------------------------------------
 // ROTA DE REGISTRO (POST /register)
@@ -31,9 +21,13 @@ const { body, validationResult } = require('express-validator');
  *                  schema:
  *                      type: object
  *                      required:
+ *                          - username
  *                          - email
  *                          - password
  *                      properties:
+ *                          username:
+ *                              type: string
+ *                              example: João Silva
  *                          email:
  *                              type: string
  *                              format: email
@@ -48,36 +42,60 @@ const { body, validationResult } = require('express-validator');
  *              description: Erro de validação ou e-mail já cadastrado.
  */
 router.post(
-'/register', 
-     [
-         body('email').isEmail().withMessage('O e-mail fornecido não é válido.'),
-         body('password').isLength({ min: 6 }).withMessage('A senha deve ter no mínimo 6 caracteres.')
-     ],
-     async (req, res) => {
-         const errors = validationResult(req);
+    '/register', 
+    [
+        body('username')
+            .trim()
+            .notEmpty().withMessage('O nome é obrigatório.')
+            .isLength({ min: 3, max: 50 }).withMessage('O nome deve ter entre 3 e 50 caracteres.'),
+        body('email')
+            .isEmail().withMessage('O e-mail fornecido não é válido.'),
+        body('password')
+            .isLength({ min: 6 }).withMessage('A senha deve ter no mínimo 6 caracteres.')
+    ],
+    async (req, res) => {
+        const errors = validationResult(req);
         if (!errors.isEmpty()) {
-             return res.status(400).json({ errors: errors.array() });
-         }
-     const { email, password } = req.body;
- 
-    try {
-         const salt = await bcrypt.genSalt(10);
-         const hashedPassword = await bcrypt.hash(password, salt);
-         await db.execute(
-             'INSERT INTO users (email, password) VALUES (?, ?)',
-             [email, hashedPassword]
-         );
-        res.status(201).json({ message: 'Usuário registrado com sucesso.' });
-         } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') {
-             return res.status(400).json({ message: 'Email já cadastrado.' });
+            return res.status(400).json({ errors: errors.array() });
         }
-         res.status(500).json({ message: 'Erro no servidor.' });
+
+        const { username, email, password } = req.body;
+
+        try {
+            // Verifica se o email já existe
+            const existingUser = getUserByEmail(email);
+            if (existingUser) {
+                return res.status(400).json({ message: 'Email já cadastrado.' });
+            }
+
+            // Criptografa a senha
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+
+            // Cria o novo usuário
+            const newUser = createUser({
+                username,
+                email,
+                password: hashedPassword
+            });
+
+            res.status(201).json({ 
+                message: 'Usuário registrado com sucesso.',
+                user: {
+                    id: newUser.id,
+                    username: newUser.username,
+                    email: newUser.email
+                }
+            });
+        } catch (error) {
+            console.error('Erro no registro:', error);
+            res.status(500).json({ message: 'Erro no servidor.' });
+        }
     }
-});
+);
 
 // ----------------------------------------------------------------------
-// ROTA DE LOGIN (POST /login) - COM SWAGGER
+// ROTA DE LOGIN (POST /login)
 // ----------------------------------------------------------------------
 /**
  * @swagger
@@ -97,55 +115,66 @@ router.post(
  *                      properties:
  *                          email:
  *                              type: string
- *                              example: usuario@teste.com
+ *                              example: pedro@email.com
  *                          password:
  *                              type: string
  *                              example: senha123
  *      responses:
  *          200:
  *              description: Login bem-sucedido. O token JWT é definido no cookie 'jwt'.
- *              headers:
- *                  Set-Cookie:
- *                      schema:
- *                          type: string
- *                          example: jwt=token_jwt_aqui; HttpOnly; Max-Age=3600
  *          401:
  *              description: Credenciais inválidas.
  */
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
-    try {
-        const [rows] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-        const user = rows[0];
-         if (!user) {
-             return res.status(401).json({ message: 'Credenciais inválidas.' });
-         }
 
+    try {
+        // Busca o usuário pelo email
+        const user = getUserByEmail(email);
+        
+        if (!user) {
+            return res.status(401).json({ message: 'Credenciais inválidas.' });
+        }
+
+        // Verifica a senha
         const isMatch = await bcrypt.compare(password, user.password);
         
         if (!isMatch) {
-             return res.status(401).json({ message: 'Credenciais inválidas.' });
-         }
+            return res.status(401).json({ message: 'Credenciais inválidas.' });
+        }
 
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-         
-         // MUDANÇA CRÍTICA: Armazena o token como um cookie HTTP-Only
+        // Gera o token JWT
+        const token = jwt.sign(
+            { id: user.id, email: user.email },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+        );
+        
+        // Armazena o token como um cookie HTTP-Only
         res.cookie('jwt', token, {
-             httpOnly: true, // Proteção XSS
-             secure: process.env.NODE_ENV === 'production', // Usar em HTTPS
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'Lax',
             maxAge: 3600000 // 1 hora
-         });
+        });
 
-         res.status(200).json({ message: 'Login bem-sucedido. Token enviado via Cookie.' });
-         console.log('Cookie JWT enviado com sucesso!');
-         
+        res.status(200).json({ 
+            message: 'Login bem-sucedido.',
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email
+            }
+        });
+        
     } catch (error) {
+        console.error('Erro no login:', error);
         res.status(500).json({ message: 'Erro no servidor.' });
     }
 });
 
 // ----------------------------------------------------------------------
-// ROTA DE LOGOUT (POST /logout) - NOVIDADE CRÍTICA E COM SWAGGER
+// ROTA DE LOGOUT (POST /logout)
 // ----------------------------------------------------------------------
 /**
  * @swagger
@@ -158,15 +187,53 @@ router.post('/login', async (req, res) => {
  *              description: Logout bem-sucedido. Cookie JWT limpo.
  */
 router.post('/logout', (req, res) => {
-    // Limpa o cookie "jwt" no navegador
-    res.cookie('jwt', token, {
+    res.cookie('jwt', '', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'Lax', // Importante para ambiente local
-        maxAge: 3600000
-        //expires: new Date(0) // Define a data de expiração para o passado
+        sameSite: 'Lax',
+        expires: new Date(0)
     });
     res.status(200).json({ message: 'Logout realizado com sucesso.' });
+});
+
+// ----------------------------------------------------------------------
+// ROTA PARA VERIFICAR SE ESTÁ AUTENTICADO (GET /me)
+// ----------------------------------------------------------------------
+/**
+ * @swagger
+ * /auth/me:
+ *  get:
+ *      summary: Retorna os dados do usuário autenticado
+ *      tags: [Autenticação]
+ *      responses:
+ *          200:
+ *              description: Dados do usuário
+ *          401:
+ *              description: Não autenticado
+ */
+router.get('/me', (req, res) => {
+    try {
+        const token = req.cookies.jwt;
+        
+        if (!token) {
+            return res.status(401).json({ message: 'Não autenticado.' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = getUserByEmail(decoded.email);
+        
+        if (!user) {
+            return res.status(401).json({ message: 'Usuário não encontrado.' });
+        }
+
+        res.status(200).json({
+            id: user.id,
+            username: user.username,
+            email: user.email
+        });
+    } catch (error) {
+        res.status(401).json({ message: 'Token inválido.' });
+    }
 });
 
 module.exports = router;

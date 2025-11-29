@@ -1,7 +1,18 @@
 // backend/src/routes/boards.routes.js
 const router = require('express').Router();
-const db = require('../utils/db');
 const { body, validationResult } = require('express-validator');
+const {
+    getBoardsByUserId,
+    getBoardById,
+    createBoard,
+    updateBoard,
+    deleteBoard,
+    hasAccessToBoard,
+    addBoardParticipant,
+    getColumnsByBoardId,
+    getCardsByColumnId,
+    getUserByEmail
+} = require('../data/mock-data');
 
 // ----------------------------------------------------------------------
 // GET /api/boards - Listar todos os quadros do usuário
@@ -20,17 +31,8 @@ const { body, validationResult } = require('express-validator');
  */
 router.get('/', async (req, res) => {
     try {
-        const userId = req.user.id; // Vem do middleware de autenticação
-        
-        // Busca quadros onde o usuário é criador ou participante
-        const [boards] = await db.execute(`
-            SELECT DISTINCT b.* 
-            FROM boards b
-            LEFT JOIN participantes_board pb ON b.id = pb.board_id
-            WHERE b.creator_id = ? OR pb.user_id = ?
-            ORDER BY b.id DESC
-        `, [userId, userId]);
-
+        const userId = req.user.id;
+        const boards = getBoardsByUserId(userId);
         res.status(200).json(boards);
     } catch (error) {
         console.error('Erro ao buscar boards:', error);
@@ -65,40 +67,33 @@ router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
+        const boardId = parseInt(id);
 
         // Verifica se o usuário tem acesso ao board
-        const [boards] = await db.execute(`
-            SELECT b.* 
-            FROM boards b
-            LEFT JOIN participantes_board pb ON b.id = pb.board_id
-            WHERE b.id = ? AND (b.creator_id = ? OR pb.user_id = ?)
-        `, [id, userId, userId]);
-
-        if (boards.length === 0) {
+        if (!hasAccessToBoard(userId, boardId)) {
             return res.status(404).json({ message: 'Quadro não encontrado ou sem permissão.' });
         }
 
-        // Busca as colunas do board
-        const [columns] = await db.execute(
-            'SELECT * FROM columns WHERE board_id = ? ORDER BY id',
-            [id]
-        );
-
-        // Busca os cards de cada coluna
-        for (let column of columns) {
-            const [cards] = await db.execute(
-                'SELECT * FROM cards WHERE column_id = ? ORDER BY id',
-                [column.id]
-            );
-            column.cards = cards;
+        const board = getBoardById(boardId);
+        if (!board) {
+            return res.status(404).json({ message: 'Quadro não encontrado.' });
         }
 
-        const board = {
-            ...boards[0],
-            columns
+        // Busca as colunas do board
+        const columns = getColumnsByBoardId(boardId);
+
+        // Busca os cards de cada coluna
+        const columnsWithCards = columns.map(column => ({
+            ...column,
+            cards: getCardsByColumnId(column.id)
+        }));
+
+        const boardData = {
+            ...board,
+            columns: columnsWithCards
         };
 
-        res.status(200).json(board);
+        res.status(200).json(boardData);
     } catch (error) {
         console.error('Erro ao buscar board:', error);
         res.status(500).json({ message: 'Erro ao buscar quadro.' });
@@ -152,18 +147,14 @@ router.post(
             const { name } = req.body;
             const userId = req.user.id;
 
-            const [result] = await db.execute(
-                'INSERT INTO boards (name, creator_id) VALUES (?, ?)',
-                [name, userId]
-            );
+            const newBoard = createBoard({
+                name,
+                creator_id: userId
+            });
 
             res.status(201).json({
                 message: 'Quadro criado com sucesso.',
-                board: {
-                    id: result.insertId,
-                    name,
-                    creator_id: userId
-                }
+                board: newBoard
             });
         } catch (error) {
             console.error('Erro ao criar board:', error);
@@ -209,22 +200,14 @@ router.put('/:id', async (req, res) => {
         const { id } = req.params;
         const { name } = req.body;
         const userId = req.user.id;
+        const boardId = parseInt(id);
 
-        // Verifica se o usuário é o criador
-        const [boards] = await db.execute(
-            'SELECT * FROM boards WHERE id = ? AND creator_id = ?',
-            [id, userId]
-        );
-
-        if (boards.length === 0) {
+        const board = getBoardById(boardId);
+        if (!board || board.creator_id !== userId) {
             return res.status(403).json({ message: 'Apenas o criador pode editar o quadro.' });
         }
 
-        await db.execute(
-            'UPDATE boards SET name = ? WHERE id = ?',
-            [name, id]
-        );
-
+        updateBoard(boardId, { name });
         res.status(200).json({ message: 'Quadro atualizado com sucesso.' });
     } catch (error) {
         console.error('Erro ao atualizar board:', error);
@@ -257,20 +240,14 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
+        const boardId = parseInt(id);
 
-        // Verifica se o usuário é o criador
-        const [boards] = await db.execute(
-            'SELECT * FROM boards WHERE id = ? AND creator_id = ?',
-            [id, userId]
-        );
-
-        if (boards.length === 0) {
+        const board = getBoardById(boardId);
+        if (!board || board.creator_id !== userId) {
             return res.status(403).json({ message: 'Apenas o criador pode deletar o quadro.' });
         }
 
-        // Deleta cards, colunas e participantes (cascade)
-        await db.execute('DELETE FROM boards WHERE id = ?', [id]);
-
+        deleteBoard(boardId);
         res.status(200).json({ message: 'Quadro deletado com sucesso.' });
     } catch (error) {
         console.error('Erro ao deletar board:', error);
@@ -313,37 +290,18 @@ router.post('/:id/participants', async (req, res) => {
         const { id } = req.params;
         const { email } = req.body;
         const userId = req.user.id;
+        const boardId = parseInt(id);
 
-        // Verifica se o usuário é o criador ou participante
-        const [boards] = await db.execute(`
-            SELECT b.* 
-            FROM boards b
-            LEFT JOIN participantes_board pb ON b.id = pb.board_id
-            WHERE b.id = ? AND (b.creator_id = ? OR pb.user_id = ?)
-        `, [id, userId, userId]);
-
-        if (boards.length === 0) {
+        if (!hasAccessToBoard(userId, boardId)) {
             return res.status(403).json({ message: 'Sem permissão para adicionar participantes.' });
         }
 
-        // Busca o usuário pelo email
-        const [users] = await db.execute(
-            'SELECT id FROM users WHERE email = ?',
-            [email]
-        );
-
-        if (users.length === 0) {
+        const participant = getUserByEmail(email);
+        if (!participant) {
             return res.status(404).json({ message: 'Usuário não encontrado.' });
         }
 
-        const participantId = users[0].id;
-
-        // Adiciona o participante (ignora se já existe)
-        await db.execute(
-            'INSERT IGNORE INTO participantes_board (user_id, board_id) VALUES (?, ?)',
-            [participantId, id]
-        );
-
+        addBoardParticipant(participant.id, boardId);
         res.status(201).json({ message: 'Participante adicionado com sucesso.' });
     } catch (error) {
         console.error('Erro ao adicionar participante:', error);
