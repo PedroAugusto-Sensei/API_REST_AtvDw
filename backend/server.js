@@ -6,12 +6,18 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const express = require('express');
 const cors = require('cors'); // Habilita a comunicação entre domínios
-const cookieParser = require('cookie-parser'); // NOVIDADE
+const cookieParser = require('cookie-parser');
 
 // Importa suas rotas de autenticação e rotas privadas
 const authRoutes = require('./src/routes/auth.routes.js');
 const privateRoutes = require('./src/routes/private.routes');
+const boardsRoutes = require('./src/routes/boards.routes.js');
+const columnsRoutes = require('./src/routes/columns.routes.js');
+const cardsRoutes = require('./src/routes/cards.routes.js');
 const { swaggerDocs } = require('./src/utils/swagger.js');
+
+// Middleware de autenticação
+const authMiddleware = require('./src/middleware/auth.js');
 
 // === 2. INICIALIZAÇÃO DO APP ===
 const app = express();
@@ -19,7 +25,7 @@ const PORT = process.env.PORT || 5000; // Define a porta, com 5000 como fallback
 
 // === 3. MIDDLEWARES DE SEGURANÇA E BÁSICOS ===
 app.use(express.json()); // Permite que a API leia JSON
-app.use(cookieParser()); // NOVIDADE: Habilita a leitura de req.cookies
+app.use(cookieParser()); // Habilita a leitura de req.cookies
 
 // === 4. Defesa de Cabeçalhos (Helmet) ===
 app.use(helmet()); 
@@ -42,10 +48,14 @@ app.use(cors({
 app.use('/api/auth', authRoutes); // Qualquer requisição para /api/auth... vai para auth.routes.js
 
 // Rotas protegidas (são as que exigem um token válido)
-app.use('/api/private', privateRoutes); // Direciona as requisições para /api...
+app.use('/api/private', privateRoutes);
+
+// Rotas de Boards, Columns e Cards (protegidas)
+app.use('/api/boards', authMiddleware, boardsRoutes);
+app.use('/api/columns', authMiddleware, columnsRoutes);
+app.use('/api/cards', authMiddleware, cardsRoutes);
 
 // === 8. Rotas de Documentação (Swagger UI) ===
-//app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 swaggerDocs(app);
 
 // === 9. INICIALIZAÇÃO DO SERVIDOR ===

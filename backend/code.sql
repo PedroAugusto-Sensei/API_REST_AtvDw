@@ -1,45 +1,58 @@
 USE api_rest;
 
-CREATE TABLE users (
+-- Tabela de usuários
+CREATE TABLE IF NOT EXISTS users (
 	id INT AUTO_INCREMENT PRIMARY KEY,
-	username VARCHAR(50) NOT NULL UNIQUE,
+	username VARCHAR(50) UNIQUE,
 	email VARCHAR(255) NOT NULL UNIQUE,
-	password VARCHAR(255) NOT NULL
+	password VARCHAR(255) NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-create table boards (
-	id INT auto_increment primary key,
-	name varchar(50),
-	creator_id INT,
-	foreign key (creator_id) references users(id)
-);
-
-CREATE TABLE columns (
+-- Tabela de boards (quadros)
+CREATE TABLE IF NOT EXISTS boards (
 	id INT AUTO_INCREMENT PRIMARY KEY,
-	name VARCHAR(50),
-	board_id INT,
-	foreign key (board_id) references boards(id)
+	name VARCHAR(50) NOT NULL,
+	creator_id INT NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE cards (
+-- Tabela de colunas
+CREATE TABLE IF NOT EXISTS columns (
 	id INT AUTO_INCREMENT PRIMARY KEY,
-	title VARCHAR(50),
+	name VARCHAR(50) NOT NULL,
+	board_id INT NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+);
+
+-- Tabela de cards
+CREATE TABLE IF NOT EXISTS cards (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	title VARCHAR(50) NOT NULL,
 	content VARCHAR(200),
-	column_id INT, 
-	FOREIGN KEY (column_id) REFERENCES columns(id) 
+	column_id INT NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
 );
 
-CREATE TABLE participants_card (
-	user_id INT,
-	card_id INT,
-	FOREIGN KEY (user_id) REFERENCES users(id),
-	FOREIGN KEY (card_id) REFERENCES cards(id),
+-- Tabela de participantes dos cards
+CREATE TABLE IF NOT EXISTS participants_card (
+	user_id INT NOT NULL,
+	card_id INT NOT NULL,
+	added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
 	PRIMARY KEY (user_id, card_id)
 );
 
-create table participantes_board (
-	user_id INT,
-	board_id INT,
-	foreign key (user_id) references users(id),
-	foreign key (board_id) references boards(id)
+-- Tabela de participantes dos boards
+CREATE TABLE IF NOT EXISTS participantes_board (
+	user_id INT NOT NULL,
+	board_id INT NOT NULL,
+	added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+	PRIMARY KEY (user_id, board_id)
 );
